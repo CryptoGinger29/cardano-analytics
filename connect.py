@@ -14,6 +14,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 import random
 from PIL import Image
+import json
+
 
 import networkx as nx
 
@@ -21,10 +23,13 @@ import os
 
 class connect:
     def __init__(self):
-        self.host=None
-        self.database=None
-        self.usr=None
-        self.pwd=None
+        f = open(os.path.join(os.getcwd(),"setup.json"))
+        setup_config = json.load(f)
+        
+        self.host=setup_config["host"]
+        self.database=setup_config["db"]
+        self.usr=setup_config["usr"]
+        self.pwd=setup_config["pwd"]
     
     def connectdb(self):
         self.conn=psycopg2.connect(
@@ -106,11 +111,6 @@ class connect:
         return df_relay
     
 con=connect()
-con.host="137.184.178.161"
-con.database="cexplorer"
-con.usr="north"
-con.pwd="050816_7SDfN2q4D&~g$%G"
-    
 
 #%%
 
