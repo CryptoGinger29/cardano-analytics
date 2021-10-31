@@ -7,3 +7,6 @@
 # Overall structure
 ![Structure](diagrams/img/structure.png)
 
+# How to setup cardano db sync
+This is handled in this blok post on our website:
+![howtocardanosync](https://www.midnort.com/post/how-to-setup-cardano-db-sync)
