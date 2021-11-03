@@ -1,3 +1,6 @@
+# Please consider delegating to our Cardano staking pool midnort (MIDN)
+https://pooltool.io/pool/09a0c14484d3f421e813bfd509b102be1d327aa1077aae3076f5efec/epochs
+
 # cardano-analytics
  Repo containing the connection to a cardano-db-sync instance. 
  
