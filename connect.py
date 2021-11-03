@@ -107,7 +107,7 @@ class analytics:
     def __init__(self):
         self.init=True
         
-    def relayanalytics(numberofrelays,plot,numbertoplot):
+    def relayanalytics(self,numberofrelays,plot,numbertoplot):
         #%% get ip's for cardano relays and get IP metadata 
         df_relay=con.lookuprelays(numberofrelays)
         
@@ -177,7 +177,7 @@ class analytics:
             
         return df_relay,df_count
 #%%
-    def tracktransaction(tranactionid,layers,plot):
+    def tracktransaction(self,tranactionid,layers,plot):
         
         starttxoutid=tranactionid
         temptxoutid=[starttxoutid]
@@ -192,8 +192,9 @@ class analytics:
         ls_edges=[]
                 
         for i in range(layers):
-            temptxoutid=[str(i) for i in temptxoutid]
-            str_ls=", ".join(temptxoutid)
+            str_temptxoutid=[str(i) for i in temptxoutid]
+            str_ls=", ".join(str_temptxoutid)
+            
             edge=con.passqry("""SELECT tx_in_id,tx_out_id,tx.out_sum as tx_size, tx2.out_sum as tx_size_out from ((tx_in 
                              LEFT JOIN tx ON tx_in.tx_in_id=tx.id) 
                              LEFT JOIN tx tx2 ON tx_in.tx_out_id=tx2.id) 
@@ -203,25 +204,29 @@ class analytics:
             newmergecol="node_{}".format(i+1)
             edge=edge.rename({"tx_in_id":newmergecol,"tx_out_id":mergecol},axis=1)
             
-            temptxoutid=edge[newmergecol].tolist()
             
             tempdir=edge[[mergecol,"tx_size"]].to_dict("records")
             lookupdir={}
             for rec in tempdir:
-                lookupdir[rec[mergecol]]=rec["tx_size"]
+                lookupdir[rec[mergecol]]=rec["tx_size"]/10**6
             
             ls_edges.extend(edge[[mergecol,newmergecol]].values.tolist())
-                        
+            
             #assignnodecordinates
             layer=0
-            for j in edge[mergecol].unique().tolist():
+            for j in temptxoutid:
                 node_x.append(i)
                 node_y.append(layer)
-                tx_sizes.append(lookupdir[j])
                 node_text.append(j)
-                graph_text.append("tx " + str(j) +": "+ str(lookupdir[j]) + " ADA")
+                try:
+                    tx_sizes.append(lookupdir[j])
+                    graph_text.append("tx " + str(j) +": "+ str(lookupdir[j]) + " ADA")
+                except:
+                    tx_sizes.append(0)
+                    graph_text.append("tx " + str(j) +": 0 ADA")
                 layer+=1
             
+            temptxoutid=edge[newmergecol].tolist()
             #center layer
             indices=[k for k, x in enumerate(node_x) if x == i]
             
@@ -234,13 +239,15 @@ class analytics:
             else:
                 paths=paths.merge(edge,how="left",on=mergecol)
         
+        
+        #%% opretter sidste lag
+        
         tempdir=edge[[newmergecol,"tx_size_out"]].to_dict("records")
         lookupdir={}
         for rec in tempdir:
             lookupdir[rec[newmergecol]]=rec["tx_size_out"]
         
         
-        #opretter sidste lag
         layer=0
         for j in edge[newmergecol].unique().tolist():
             node_x.append(i+1)
@@ -250,6 +257,11 @@ class analytics:
             graph_text.append("tx " + str(j) +": "+ str(lookupdir[j]) + " ADA")
             layer+=1
         
+        edge["sink"]=0
+        
+        ls_edges.extend(edge[[mergecol,"sink"]].values.tolist())
+        
+
         #%%
         #center layer
         indices=[k for k, x in enumerate(node_x) if x == i+1]
@@ -262,19 +274,21 @@ class analytics:
         edge_x=[]
         edge_y=[]
         for i in ls_edges:
-            x0=node_x[node_text.index(i[0])]
-            y0=node_y[node_text.index(i[0])]
+            #ignores edges that leads to sink
+            if i[1]!=0:
+                x0=node_x[node_text.index(i[0])]
+                y0=node_y[node_text.index(i[0])]
+                
+                x1=node_x[node_text.index(i[1])]
+                y1=node_y[node_text.index(i[1])]
+                
+                edge_x.append(x0)
+                edge_x.append(x1)
+                edge_x.append(None)
+                edge_y.append(y0)
+                edge_y.append(y1)
+                edge_y.append(None) 
             
-            x1=node_x[node_text.index(i[1])]
-            y1=node_y[node_text.index(i[1])]
-            
-            edge_x.append(x0)
-            edge_x.append(x1)
-            edge_x.append(None)
-            edge_y.append(y0)
-            edge_y.append(y1)
-            edge_y.append(None) 
-        
         if plot:
             #Setting up node plot
             node_trace = go.Scatter(
@@ -300,7 +314,9 @@ class analytics:
                 x=edge_x, y=edge_y,
                 line=dict(width=0.5, color='#888'),
                 hoverinfo='none',
-                mode='lines')
+                mode='lines+markers',
+                marker_symbol="triangle-left-open",
+                marker_size=20)
             
             #setting up figure
             fig = go.Figure(data=[edge_trace, node_trace],
@@ -314,12 +330,36 @@ class analytics:
                             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
                             )
             
+            for i in range(layers+1):
+                count=sum([c==i for c in node_x])
+                fig.add_annotation(x=i, y=(count/2)+20,
+                                   text="Layer {} <br> Size {}".format(i,count),
+                                   showarrow=False)
+            
             #write graph to folder
             path=os.path.join(os.getcwd(),"output","network.html")
             fig.write_html(path)
         
-        return node_x,node_y,edge_x,edge_y,tx_sizes
+        return node_x,node_y,edge_x,edge_y,node_text,tx_sizes
 
-
+    def gettransaddr(self,node_text):
+        
+        str_txid=[str(i) for i in node_text]
+        str_ls=", ".join(str_txid)
+        addr=con.passqry("""SELECT tx_id, address from tx_out 
+                         WHERE tx_id IN ({})""".format(str_ls))
+        
+        
+        print("Total transactions {} to {} different addresses".format(len(node_text),len(addr["address"].unique().tolist())))
+        return addr
+    
 #%%
 con=connect()
+
+datal=analytics()
+
+#%%
+node_x,node_y,edge_x,edge_y,node_text,tx_sizes=datal.tracktransaction(18875,7,True)
+
+#%%
+addr=datal.gettransaddr(node_text)
